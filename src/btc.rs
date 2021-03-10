@@ -21,8 +21,8 @@ impl ErgveinFilter {
         let mut out = Cursor::new(Vec::new());
         {
             let mut writer = BlockFilterWriter::new(&mut out, block);
-            writer.add_output_scripts();
-            writer.add_input_scripts(script_for_coin)?;
+            add_output_scripts(&mut writer, block);
+            add_input_scripts(&mut writer, block, script_for_coin)?;
             writer.finish()?;
         }
         Ok(ErgveinFilter { content: out.into_inner() })
@@ -39,6 +39,40 @@ impl ErgveinFilter {
         let filter_reader = BlockFilterReader::new(block_hash);
         filter_reader.match_all(&mut Cursor::new(self.content.as_slice()), query)
     }
+}
+
+fn is_script_indexable(script: &Script) -> bool {
+    !script.is_empty() && (script.is_v0_p2wsh() || script.is_v0_p2wpkh() || script.is_op_return())
+}
+
+fn add_output_scripts(writer: &mut BlockFilterWriter, block: &Block) {
+    for transaction in &block.txdata {
+        for output in &transaction.output {
+            if is_script_indexable(&output.script_pubkey) {
+                writer.add_element(output.script_pubkey.as_bytes());
+            }
+        }
+    }
+}
+
+fn add_input_scripts<F>(writer: &mut BlockFilterWriter, block: &Block, script_for_coin: F) -> Result<(), Error>
+    where
+    F: Fn(&OutPoint) -> Result<Script, Error>
+{
+    for script in block.txdata.iter()
+        .skip(1) // skip coinbase
+        .flat_map(|t| t.input.iter().map(|i| &i.previous_output))
+        .map(script_for_coin) {
+        match script {
+            Ok(script) => {
+                if is_script_indexable(&script) {
+                    writer.add_element(script.as_bytes())
+                }
+            }
+            Err(e) => return Err(e)
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
