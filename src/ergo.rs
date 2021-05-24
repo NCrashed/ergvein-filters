@@ -1,13 +1,41 @@
 use bitcoin::util::bip158::GCSFilterWriter;
 use ergo_lib::chain::{ergo_box::BoxId, transaction::Transaction};
-use ergotree_ir::serialization::{SerializationError, SigmaSerializable, constant_store::ConstantStore, sigma_byte_reader::SigmaByteReader};
 use ergotree_ir::ergo_tree::ErgoTree;
+use ergotree_ir::serialization::{SerializationError, SigmaSerializable, constant_store::ConstantStore, sigma_byte_reader::SigmaByteReader};
 use sigma_ser::{peekable_reader::PeekableReader, vlq_encode::ReadSigmaVlqExt};
 use std::io::{self, Cursor};
+use super::utils::{slice_to_u64_le, M, P};
 
-/// Golomb encoding parameter as in BIP-158, see also https://gist.github.com/sipa/576d5f09c3b86c3b1b75598d799fc845
-const P: u8 = 19;
-const M: u64 = 784931;
+/// A BIP158 like filter that diverge only in which data is added to the filter.
+///
+/// Ergvein wallet adds only segwit scripts and data carrier to save bandwith for mobile clients.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErgoFilter {
+    /// Golomb encoded filter
+    pub content: Vec<u8>
+}
+
+impl ErgoFilter {
+    /// create a new filter from pre-computed data
+    pub fn new (content: &[u8]) -> ErgoFilter {
+        ErgoFilter { content: content.to_vec() }
+    }
+
+    /// Compute script filter for ergo block. It takes transaction data as returned by
+    /// ergo node as input
+    pub fn new_script_filter<M>(block_id: &[u8], block: &[u8], script_for_coin: M) -> Result<ErgoFilter, SerializationError>
+        where M: Fn(&BoxId) -> Result<ErgoTree, SerializationError>
+    {
+        let mut out = Cursor::new(Vec::new());
+        {
+            let mut block_own = block.to_owned();
+            let mut writer = ErgoFilterWriter::new(&mut out, block_id, &mut block_own);
+            writer.add_scripts(script_for_coin)?;
+            writer.finish()?;
+        }
+        Ok(ErgoFilter { content: out.into_inner() })
+    }
+}
 
 /// Compiles and writes a block filter
 pub struct ErgoFilterWriter<'a> {
@@ -61,18 +89,3 @@ impl<'a> ErgoFilterWriter<'a> {
         self.writer.finish()
     }
 }
-
-macro_rules! define_slice_to_le {
-    ($name: ident, $type: ty) => {
-        #[inline]
-        pub fn $name(slice: &[u8]) -> $type {
-            assert_eq!(slice.len(), ::std::mem::size_of::<$type>());
-            let mut res = 0;
-            for i in 0..::std::mem::size_of::<$type>() {
-                res |= (slice[i] as $type) << i*8;
-            }
-            res
-        }
-    }
-}
-define_slice_to_le!(slice_to_u64_le, u64);

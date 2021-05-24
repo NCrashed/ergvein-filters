@@ -1,28 +1,24 @@
-use bitcoin::{Block, BlockHash, OutPoint, Script};
-use bitcoin::util::bip158::{BlockFilterWriter, BlockFilterReader, Error};
-use ergo_lib::chain::ergo_box::BoxId;
-use ergotree_ir::ergo_tree::ErgoTree;
-use ergotree_ir::serialization::SerializationError;
+use bitcoin::{Block, OutPoint, Script};
+use bitcoin::util::bip158::{BlockFilterWriter, Error};
 use std::io::Cursor;
-use super::ergo::ErgoFilterWriter;
 
 /// A BIP158 like filter that diverge only in which data is added to the filter.
 ///
 /// Ergvein wallet adds only segwit scripts and data carrier to save bandwith for mobile clients.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ErgveinFilter {
+pub struct BtcFilter {
     /// Golomb encoded filter
     pub content: Vec<u8>
 }
 
-impl ErgveinFilter {
+impl BtcFilter {
     /// create a new filter from pre-computed data
-    pub fn new (content: &[u8]) -> ErgveinFilter {
-        ErgveinFilter { content: content.to_vec() }
+    pub fn new (content: &[u8]) -> BtcFilter {
+        BtcFilter { content: content.to_vec() }
     }
 
     /// Compute a SCRIPT_FILTER that contains spent and output scripts
-    pub fn new_script_filter<M>(block: &Block, script_for_coin: M) -> Result<ErgveinFilter, Error>
+    pub fn new_script_filter<M>(block: &Block, script_for_coin: M) -> Result<BtcFilter, Error>
         where M: Fn(&OutPoint) -> Result<Script, Error> {
         let mut out = Cursor::new(Vec::new());
         {
@@ -31,34 +27,7 @@ impl ErgveinFilter {
             add_input_scripts(&mut writer, block, script_for_coin)?;
             writer.finish()?;
         }
-        Ok(ErgveinFilter { content: out.into_inner() })
-    }
-
-    /// Compute script filter for ergo block. It takes transaction data as returned by
-    /// ergo node as input
-    pub fn new_ergo_filter<M>(block_id: &[u8], block: &[u8], script_for_coin: M) -> Result<ErgveinFilter, SerializationError>
-        where M: Fn(&BoxId) -> Result<ErgoTree, SerializationError>
-    {
-        let mut out = Cursor::new(Vec::new());
-        {
-            let mut block_own = block.to_owned();
-            let mut writer = ErgoFilterWriter::new(&mut out, block_id, &mut block_own);
-            writer.add_scripts(script_for_coin)?;
-            writer.finish()?;
-        }
-        Ok(ErgveinFilter { content: out.into_inner() })
-    }
-
-    /// match any query pattern
-    pub fn match_any(&self, block_hash: &BlockHash, query: &mut dyn Iterator<Item=&[u8]>) -> Result<bool, Error> {
-        let filter_reader = BlockFilterReader::new(block_hash);
-        filter_reader.match_any(&mut Cursor::new(self.content.as_slice()), query)
-    }
-
-    /// match all query pattern
-    pub fn match_all(&self, block_hash: &BlockHash, query: &mut dyn Iterator<Item=&[u8]>) -> Result<bool, Error> {
-        let filter_reader = BlockFilterReader::new(block_hash);
-        filter_reader.match_all(&mut Cursor::new(self.content.as_slice()), query)
+        Ok(BtcFilter { content: out.into_inner() })
     }
 }
 
@@ -112,13 +81,13 @@ mod tests {
         let filter_content = Vec::from_hex("13461a23a8ce05d6ce6a435b1d11d65707a3c6fce967152b8ae09f851d42505b3c41dd87b705d5f4cc2c3062ddcdfebe7a1e80").unwrap();
         let block = load_block("./test/block1");
         let txmap = make_inputs_map(load_txs("./test/block1-txs"));
-        let filter = ErgveinFilter::new_script_filter(&block,
+        let filter = BtcFilter::new_script_filter(&block,
                                         |o| if let Some(s) = txmap.get(o) {
                                             Ok(s.clone())
                                         } else {
                                             Err(Error::UtxoMissing(o.clone()))
                                         }).unwrap();
-        let test_filter = ErgveinFilter::new(filter_content.as_slice());
+        let test_filter = BtcFilter::new(filter_content.as_slice());
 
         assert_eq!(test_filter.content, filter.content);
 
