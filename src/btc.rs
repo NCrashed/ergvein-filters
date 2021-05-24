@@ -1,14 +1,10 @@
-use bitcoin::{Block, BlockHash, OutPoint, Script, BlockHeader};
+use bitcoin::{Block, BlockHash, OutPoint, Script};
 use bitcoin::util::bip158::{BlockFilterWriter, BlockFilterReader, Error};
-use std::io::Cursor;
-
-use ergotree_ir::serialization::constant_store::ConstantStore;
-use ergotree_ir::serialization::sigma_byte_reader::SigmaByteReader;
+use ergo_lib::chain::ergo_box::BoxId;
+use ergotree_ir::ergo_tree::ErgoTree;
 use ergotree_ir::serialization::SerializationError;
-use ergotree_ir::serialization::SigmaSerializable;
-use sigma_ser::peekable_reader::PeekableReader;
-use sigma_ser::vlq_encode::ReadSigmaVlqExt;
-use ergo_lib::chain::transaction::Transaction;
+use std::io::Cursor;
+use super::ergo::ErgoFilterWriter;
 
 /// A BIP158 like filter that diverge only in which data is added to the filter.
 ///
@@ -40,45 +36,17 @@ impl ErgveinFilter {
 
     /// Compute script filter for ergo block. It takes transaction data as returned by
     /// ergo node as input
-    pub fn new_ergo(bytes: &[u8]) -> Result<String, SerializationError> {
-        let mut buf = bytes.to_owned();
-        // FIXME: Maybe there're saner ways of creating SigmaByteReader.
-        // NOTE: ConstantStore is not public
-        let cursor = Cursor::new(&mut buf[..]);
-        let peekable = PeekableReader::new(cursor);
-        let mut r = SigmaByteReader::new(peekable, ConstantStore::empty());
-        // Parsing of block
-        let n_tx = {
-            let n = r.get_u32()?;
-            if n == 10000002 { r.get_u32()? } else { n }
-        };
+    pub fn new_ergo_filter<M>(block_id: &[u8], block: &[u8], script_for_coin: M) -> Result<ErgveinFilter, SerializationError>
+        where M: Fn(&BoxId) -> Result<ErgoTree, SerializationError>
+    {
         let mut out = Cursor::new(Vec::new());
-        // FIXME: Block filter writer demands bitcoin block to start. We create
-        //        dummy here. Actually it only uses block ID
-        let block = Block {
-            header: BlockHeader {
-                version: 0,
-                prev_blockhash: Default::default(),
-                merkle_root: Default::default(),
-                time: 0,
-                bits: 0,
-                nonce: 0
-            },
-            txdata: Vec::new(),
-        };
-        let mut writer = BlockFilterWriter::new(&mut out, &block);
-        for _ in 1..n_tx {
-            let tx = Transaction::sigma_parse(&mut r)?;
-            for out in tx.output_candidates {
-                let script = out.ergo_tree.sigma_serialize_bytes();
-                writer.add_element(&script);
-            }
-            for bid in tx.inputs {
-                let bid_bytes = bid.box_id.sigma_serialize_bytes();
-                writer.add_element(&bid_bytes);
-            }
+        {
+            let mut block_own = block.to_owned();
+            let mut writer = ErgoFilterWriter::new(&mut out, block_id, &mut block_own);
+            writer.add_scripts(script_for_coin)?;
+            writer.finish()?;
         }
-        panic!()
+        Ok(ErgveinFilter { content: out.into_inner() })
     }
 
     /// match any query pattern
