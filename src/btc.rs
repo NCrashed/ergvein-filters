@@ -25,8 +25,7 @@ impl ErgveinFilter {
         {
             let mut writer = BlockFilterWriter::new(&mut out, block);
             add_output_scripts(&mut writer, &block.txdata);
-            // Since this is block's txdata, skip the first (coinbase) transaction
-            add_input_scripts(&mut writer, &block.txdata.as_slice()[1..], script_for_coin)?;
+            add_input_scripts(&mut writer, &block.txdata, script_for_coin)?;
             writer.finish()?;
         }
         Ok(ErgveinFilter { content: out.into_inner() })

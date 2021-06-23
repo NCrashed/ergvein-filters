@@ -64,6 +64,7 @@ impl<'a> FilterWriter for MempoolFilterWriter<'a> {
     fn add_filter_element(&mut self, data: &[u8]) {
         self.writer.add_element(data);
     }
+    fn is_block_filter(&mut self) -> bool{ false }
 }
 
 impl<'a> MempoolFilterWriter<'a> {

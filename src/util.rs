@@ -3,12 +3,14 @@ use bitcoin::{util::bip158::{BlockFilterWriter, Error}, Script, Transaction, Out
 // The trait is required to implement common functions
 pub trait FilterWriter {
     fn add_filter_element(&mut self, data: &[u8]);
+    fn is_block_filter(&mut self) -> bool;
 }
 
 impl<'a> FilterWriter for BlockFilterWriter<'a> {
     fn add_filter_element(&mut self, data: &[u8]) {
         self.add_element(data);
     }
+    fn is_block_filter(&mut self) -> bool{ true }
 }
 
 pub fn is_script_indexable(script: &Script) -> bool {
@@ -25,13 +27,15 @@ pub fn add_output_scripts(writer: &mut dyn FilterWriter, txs: &[Transaction]) {
     }
 }
 
-// If you are passing a block, skip the first (coinbase) transaction.
 pub fn add_input_scripts<F>(writer: &mut dyn FilterWriter, txs: &[Transaction], script_for_coin: F) -> Result<(), Error>
     where
     F: Fn(&OutPoint) -> Result<Script, Error>
 {
+    // If this is the block filter, skip the coinbase
+    let n = if writer.is_block_filter() {1} else {0};
     for script in txs.iter()
         .flat_map(|t| t.input.iter().map(|i| &i.previous_output))
+        .skip(n)
         .map(script_for_coin) {
         match script {
             Ok(script) => {

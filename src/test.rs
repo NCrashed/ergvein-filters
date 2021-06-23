@@ -60,8 +60,9 @@ fn mempool_test() {
             } else {
                 Err(Error::UtxoMissing(o.clone()))
             }).unwrap();
-    let tx = &txs2[11];
-    assert_eq!(test_filter.match_tx_outputs(k0,k1, &tx).unwrap(), true);
+    for (i, tx) in txs2.iter().enumerate(){
+        assert!(test_filter.match_tx_outputs(k0,k1, &tx).unwrap(), "{} failed", i);
+    }
 }
 
 fn make_inputs_map(txs: Vec<Transaction>) -> HashMap<OutPoint, Script> {
