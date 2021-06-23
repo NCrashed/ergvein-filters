@@ -31,6 +31,9 @@ fn block_00000000000000000007fc62780dee62d79ba02e7d325d7503e80c4da8b16b72() {
 fn block_000000000000017c36b1c7c70f467244009c552e1732604a0f779fc6ff2d6112() {
     let filter_content = Vec::from_hex("13461a23a8ce05d6ce6a435b1d11d65707a3c6fce967152b8ae09f851d42505b3c41dd87b705d5f4cc2c3062ddcdfebe7a1e80").unwrap();
     let block = load_block("./test/block1");
+    let mut txs = block.txdata.clone();
+    txs.remove(0); // once again. ignore coinbase
+    let block_hash = block.block_hash();
     let txmap = make_inputs_map(load_txs("./test/block1-txs"));
     let filter = ErgveinFilter::new_script_filter(&block,
                                     |o| if let Some(s) = txmap.get(o) {
@@ -39,8 +42,10 @@ fn block_000000000000017c36b1c7c70f467244009c552e1732604a0f779fc6ff2d6112() {
                                         Err(Error::UtxoMissing(o.clone()))
                                     }).unwrap();
     let test_filter = ErgveinFilter::new(filter_content.as_slice());
-
-    assert_eq!(test_filter.content, filter.content);
+    for (i, tx) in txs.iter().enumerate(){
+        assert!(filter.match_tx_outputs(&block_hash, &tx).unwrap(), "{} failed", i);
+    }
+    // assert_eq!(test_filter.content, filter.content);
 
 }
 
