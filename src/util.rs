@@ -34,16 +34,18 @@ pub fn add_input_scripts<F>(writer: &mut dyn FilterWriter, txs: &[Transaction], 
     // If this is the block filter, skip the coinbase
     let n = if writer.is_block_filter() {1} else {0};
     for script in txs.iter()
-        .flat_map(|t| t.input.iter().map(|i| &i.previous_output))
-        .skip(n)
-        .map(script_for_coin) {
+    .skip(n)
+    .flat_map(|t|
+        t.input.iter()
+        .filter_map(|i| if i.script_sig.is_empty(){ Some(&i.previous_output)} else {None})
+    ).map(script_for_coin) {
         match script {
-            Ok(script) => {
-                if is_script_indexable(&script) {
-                    writer.add_filter_element(script.as_bytes())
-                }
+        Ok(script) => {
+            if is_script_indexable(&script) {
+                writer.add_filter_element(script.as_bytes())
             }
-            Err(e) => return Err(e)
+        }
+        Err(e) => return Err(e)
         }
     }
     Ok(())
