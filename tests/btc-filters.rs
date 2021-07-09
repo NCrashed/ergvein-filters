@@ -1,18 +1,15 @@
-use crate::btc::ErgveinFilter;
-use crate::mempool::ErgveinMempoolFilter;
-use crate::util::is_script_indexable;
+use ergvein_filters::btc::ErgveinFilter;
+use ergvein_filters::mempool::ErgveinMempoolFilter;
+use ergvein_filters::util::is_script_indexable;
 use bitcoin::consensus::deserialize;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::util::bip158::Error;
-use bitcoin::Block;
 use bitcoin::BlockHash;
-use bitcoin::OutPoint;
-use bitcoin::Script;
+
 use bitcoin::Transaction;
-use std::collections::HashMap;
-use std::fs;
-use std::io;
-use std::io::BufRead;
+
+mod util;
+use crate::util::*;
 
 #[test]
 fn block_00000000000000000007fc62780dee62d79ba02e7d325d7503e80c4da8b16b72() {
@@ -95,35 +92,4 @@ fn mempool_test() {
             );
         }
     }
-}
-
-fn make_inputs_map(txs: Vec<Transaction>) -> HashMap<OutPoint, Script> {
-    let mut map = HashMap::new();
-    for tx in txs {
-        let mut out_point = OutPoint {
-            txid: tx.txid(),
-            vout: 0,
-        };
-        for (i, out) in tx.output.iter().enumerate() {
-            out_point.vout = i as u32;
-            map.insert(out_point.clone(), out.script_pubkey.clone());
-        }
-    }
-    map
-}
-
-fn load_block(path: &str) -> Block {
-    let mut contents = fs::read_to_string(path).unwrap();
-    contents.pop();
-    deserialize(&Vec::from_hex(&contents).unwrap()).unwrap()
-}
-
-fn load_txs(path: &str) -> Vec<Transaction> {
-    let mut res = vec![];
-    let file = std::fs::File::open(path).unwrap();
-    for line in io::BufReader::new(file).lines() {
-        let tx = deserialize(&Vec::from_hex(&line.unwrap()).unwrap()).unwrap();
-        res.push(tx);
-    }
-    res
 }
