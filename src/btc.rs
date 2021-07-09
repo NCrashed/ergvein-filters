@@ -3,6 +3,9 @@ use bitcoin::util::bip158::{BlockFilterReader, BlockFilterWriter, Error};
 use bitcoin::{Block, BlockHash, OutPoint, Script, Transaction};
 use std::io::Cursor;
 
+#[cfg(test)]
+mod test;
+
 /// A BIP158 like filter that diverge only in which data is added to the filter.
 ///
 /// Ergvein wallet adds only segwit scripts and data carrier to save bandwith for mobile clients.
