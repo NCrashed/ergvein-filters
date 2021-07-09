@@ -45,7 +45,10 @@ pub fn add_input_scripts<F>(writer: &mut dyn FilterWriter, txs: &[Transaction], 
                 writer.add_filter_element(script.as_bytes())
             }
         }
-        Err(e) => return Err(e)
+        Err(e) => if !writer.is_block_filter() {
+                // If it's a mempool filter, just skip invalid inputs
+                return Err(e)
+            }
         }
     }
     Ok(())
