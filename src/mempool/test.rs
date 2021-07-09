@@ -1,6 +1,6 @@
 use crate::mempool::ErgveinMempoolFilter;
-use crate::util::is_script_indexable;
 use crate::test::utils::*;
+use crate::util::is_script_indexable;
 use bitcoin::util::bip158::Error;
 
 #[test]
